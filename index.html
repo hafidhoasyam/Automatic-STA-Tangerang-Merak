@@ -1,104 +1,165 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>GPS Auto STA</title>
+<title>GPS Auto Detect STA</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
 body{
-font-family:Arial;
-text-align:center;
-margin-top:50px;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  margin-top: 40px;
 }
 
 #sta{
-font-size:40px;
-font-weight:bold;
-color:red;
+  font-size: 42px;
+  font-weight: bold;
+  color: #d32f2f;
+  margin-top: 10px;
 }
 
 #dist{
-font-size:20px;
+  font-size: 20px;
+  margin-top: 5px;
+}
+
+#status{
+  font-size: 14px;
+  color: #555;
+  margin-top: 15px;
 }
 </style>
-
 </head>
 
 <body>
 
 <h2>GPS Auto Detect STA</h2>
 
-<div id="sta">Detecting...</div>
+<div id="sta">Loading STA data...</div>
 <div id="dist"></div>
+<div id="status"></div>
 
 <script>
 
-let staData=[];
+// ======= DATA STA =======
+let staData = [];
 
+// ======= LAST STA (anti jitter) =======
+let lastSTA = null;
+let lastDistance = null;
+
+// ======= THRESHOLD METER =======
+const THRESHOLD = 6;
+
+// ======= LOAD CSV =======
 fetch("sta_tm.csv")
-.then(r=>r.text())
-.then(text=>{
-let rows=text.split("\n").slice(1);
+.then(r => r.text())
+.then(text => {
 
-rows.forEach(r=>{
-let c=r.split(",");
+  let rows = text.split("\n").slice(1);
 
-if(c.length>2){
-staData.push({
-sta:parseFloat(c[0]),
-lat:parseFloat(c[1]),
-lon:parseFloat(c[2])
+  rows.forEach(r => {
+
+    let c = r.split(",");
+
+    if(c.length >= 3){
+
+      staData.push({
+        sta: parseFloat(c[0]),
+        lat: parseFloat(c[1]),
+        lon: parseFloat(c[2])
+      });
+
+    }
+
+  });
+
+  document.getElementById("sta").innerHTML = "STA data loaded";
 });
-}
-});
-});
 
-function distance(lat1,lon1,lat2,lon2){
+// ======= DISTANCE FUNCTION =======
+function distance(lat1, lon1, lat2, lon2){
 
-let R=6371000;
+  let R = 6371000;
 
-let dLat=(lat2-lat1)*Math.PI/180;
-let dLon=(lon2-lon1)*Math.PI/180;
+  let dLat = (lat2 - lat1) * Math.PI / 180;
+  let dLon = (lon2 - lon1) * Math.PI / 180;
 
-let a=
-Math.sin(dLat/2)*Math.sin(dLat/2)+
-Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)*Math.sin(dLon/2);
+  let a =
+    Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180) *
+    Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)*Math.sin(dLon/2);
 
-let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-return R*c;
-}
-
-function findSTA(lat,lon){
-
-let min=999999;
-let nearest="";
-
-staData.forEach(p=>{
-
-let d=distance(lat,lon,p.lat,p.lon);
-
-if(d<min){
-min=d;
-nearest=p.sta;
+  return R * c;
 }
 
-});
+// ======= FIND NEAREST STA =======
+function findSTA(lat, lon){
 
-document.getElementById("sta").innerHTML="STA "+nearest;
-document.getElementById("dist").innerHTML="Distance "+min.toFixed(1)+" m";
+  let min = 999999;
+  let nearest = null;
+
+  staData.forEach(p => {
+
+    let d = distance(lat, lon, p.lat, p.lon);
+
+    if(d < min){
+      min = d;
+      nearest = p.sta;
+    }
+
+  });
+
+  // ======= ANTI JITTER =======
+  if(lastSTA !== null){
+
+    if(min > THRESHOLD){
+      document.getElementById("status").innerHTML =
+        "GPS drift ignored (" + min.toFixed(1) + " m)";
+      return;
+    }
+
+  }
+
+  lastSTA = nearest;
+  lastDistance = min;
+
+  document.getElementById("sta").innerHTML = "STA " + nearest;
+  document.getElementById("dist").innerHTML = "Distance " + min.toFixed(2) + " m";
 
 }
 
-navigator.geolocation.watchPosition(pos=>{
+// ======= GPS WATCH =======
+navigator.geolocation.watchPosition(
 
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
+  pos => {
 
-findSTA(lat,lon);
+    let lat = pos.coords.latitude;
+    let lon = pos.coords.longitude;
+    let acc = pos.coords.accuracy;
 
-});
+    document.getElementById("status").innerHTML =
+      "GPS accuracy: " + acc.toFixed(1) + " m";
+
+    findSTA(lat, lon);
+
+  },
+
+  err => {
+    document.getElementById("status").innerHTML =
+      "GPS Error: " + err.message;
+  },
+
+  {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 5000
+  }
+
+);
 
 </script>
 
