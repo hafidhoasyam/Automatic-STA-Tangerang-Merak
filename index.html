@@ -20,6 +20,11 @@ color:#d32f2f;
 #offset{
 font-size:18px;
 }
+
+#status{
+font-size:14px;
+color:#555;
+}
 </style>
 
 </head>
@@ -30,25 +35,11 @@ font-size:18px;
 
 <div id="sta">Loading STA data...</div>
 <div id="offset"></div>
+<div id="status"></div>
 
 <script>
 
 let staData=[];
-
-function startGPS(){
-
-navigator.geolocation.watchPosition(pos=>{
-
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
-
-findSTA(lat,lon);
-
-},{
-enableHighAccuracy:true
-});
-
-}
 
 function distance(lat1,lon1,lat2,lon2){
 
@@ -102,6 +93,45 @@ document.getElementById("offset").innerHTML="Offset "+min.toFixed(2)+" m";
 
 }
 
+function startGPS(){
+
+if(!navigator.geolocation){
+
+document.getElementById("status").innerHTML="GPS tidak didukung browser";
+
+return;
+
+}
+
+navigator.geolocation.watchPosition(
+
+function(pos){
+
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
+
+document.getElementById("status").innerHTML="GPS aktif";
+
+findSTA(lat,lon);
+
+},
+
+function(err){
+
+document.getElementById("status").innerHTML="GPS error: "+err.message;
+
+},
+
+{
+enableHighAccuracy:true,
+timeout:10000,
+maximumAge:0
+}
+
+);
+
+}
+
 fetch("sta_tm.csv?nocache="+Date.now())
 .then(r=>r.text())
 .then(text=>{
@@ -125,6 +155,7 @@ lon:parseFloat(c[2])
 });
 
 document.getElementById("sta").innerHTML="STA data loaded";
+document.getElementById("status").innerHTML="Menunggu GPS...";
 
 startGPS();
 
