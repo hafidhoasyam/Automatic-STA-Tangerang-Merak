@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>GPS Continuous STA</title>
+<title>GPS STA Detector</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
+
 body{
 font-family:Arial;
 text-align:center;
@@ -12,84 +13,121 @@ margin-top:40px;
 }
 
 #sta{
-font-size:40px;
+font-size:42px;
 font-weight:bold;
 color:#d32f2f;
 }
 
 #offset{
 font-size:18px;
+margin-top:6px;
+}
+
+#accuracy{
+font-size:16px;
+color:#555;
+margin-top:4px;
 }
 
 #status{
 font-size:14px;
-color:#555;
+margin-top:10px;
+color:#777;
 }
-</style>
 
+</style>
 </head>
 
 <body>
 
-<h2>GPS Continuous STA</h2>
+<h2>GPS STA Detector</h2>
 
 <div id="sta">Loading STA data...</div>
 <div id="offset"></div>
+<div id="accuracy"></div>
 <div id="status"></div>
 
 <script>
 
-let staData=[];
+let staData=[]
+let gpsBuffer=[]
+let lastSTA=null
+
+const SMOOTH_COUNT=5
+const ACCURACY_LIMIT=15
 
 function distance(lat1,lon1,lat2,lon2){
 
-let R=6371000;
+let R=6371000
 
-let dLat=(lat2-lat1)*Math.PI/180;
-let dLon=(lon2-lon1)*Math.PI/180;
+let dLat=(lat2-lat1)*Math.PI/180
+let dLon=(lon2-lon1)*Math.PI/180
 
 let a=
 Math.sin(dLat/2)*Math.sin(dLat/2)+
 Math.cos(lat1*Math.PI/180)*
 Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)*Math.sin(dLon/2);
+Math.sin(dLon/2)*Math.sin(dLon/2)
 
-let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
 
-return R*c;
+return R*c
+
+}
+
+function smoothGPS(lat,lon){
+
+gpsBuffer.push({lat,lon})
+
+if(gpsBuffer.length>SMOOTH_COUNT){
+gpsBuffer.shift()
+}
+
+let sumLat=0
+let sumLon=0
+
+gpsBuffer.forEach(p=>{
+sumLat+=p.lat
+sumLon+=p.lon
+})
+
+return{
+lat:sumLat/gpsBuffer.length,
+lon:sumLon/gpsBuffer.length
+}
 
 }
 
 function findSTA(lat,lon){
 
-let min=999999;
-let index=0;
+let min=999999
+let nearest=null
 
-staData.forEach((p,i)=>{
+for(let i=0;i<staData.length;i++){
 
-let d=distance(lat,lon,p.lat,p.lon);
+let p=staData[i]
+
+let d=distance(lat,lon,p.lat,p.lon)
 
 if(d<min){
-min=d;
-index=i;
+min=d
+nearest=p.sta
 }
 
-});
+}
 
-let p1=staData[index];
-let p2=staData[index+1];
+if(lastSTA!==null){
 
-if(!p2) return;
+if(Math.abs(nearest-lastSTA)>20){
+return
+}
 
-let d1=distance(lat,lon,p1.lat,p1.lon);
-let d2=distance(lat,lon,p2.lat,p2.lon);
+}
 
-let ratio=d1/(d1+d2);
+lastSTA=nearest
 
-let sta=p1.sta+(p2.sta-p1.sta)*ratio;
-
-document.getElementById("sta").innerHTML="STA "+sta.toFixed(1);
-document.getElementById("offset").innerHTML="Offset "+min.toFixed(2)+" m";
+document.getElementById("sta").innerHTML="STA "+nearest
+document.getElementById("offset").innerHTML="Offset "+min.toFixed(1)+" m"
 
 }
 
@@ -97,9 +135,9 @@ function startGPS(){
 
 if(!navigator.geolocation){
 
-document.getElementById("status").innerHTML="GPS tidak didukung browser";
+document.getElementById("status").innerHTML="GPS not supported"
 
-return;
+return
 
 }
 
@@ -107,28 +145,37 @@ navigator.geolocation.watchPosition(
 
 function(pos){
 
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
+let acc=pos.coords.accuracy
 
-document.getElementById("status").innerHTML="GPS aktif";
+document.getElementById("accuracy").innerHTML=
+"GPS accuracy "+acc.toFixed(1)+" m"
 
-findSTA(lat,lon);
+if(acc>ACCURACY_LIMIT){
+return
+}
+
+let rawLat=pos.coords.latitude
+let rawLon=pos.coords.longitude
+
+let smoothed=smoothGPS(rawLat,rawLon)
+
+findSTA(smoothed.lat,smoothed.lon)
 
 },
 
 function(err){
 
-document.getElementById("status").innerHTML="GPS error: "+err.message;
+document.getElementById("status").innerHTML="GPS error: "+err.message
 
 },
 
 {
 enableHighAccuracy:true,
-timeout:10000,
-maximumAge:0
+maximumAge:0,
+timeout:10000
 }
 
-);
+)
 
 }
 
@@ -136,30 +183,32 @@ fetch("sta_tm.csv?nocache="+Date.now())
 .then(r=>r.text())
 .then(text=>{
 
-let rows=text.split("\n").slice(1);
+let rows=text.split("\n").slice(1)
 
 rows.forEach(r=>{
 
-let c=r.split(",");
+let c=r.split(",")
 
 if(c.length>=3){
 
 staData.push({
+
 sta:parseFloat(c[0]),
 lat:parseFloat(c[1]),
 lon:parseFloat(c[2])
-});
+
+})
 
 }
 
-});
+})
 
-document.getElementById("sta").innerHTML="STA data loaded";
-document.getElementById("status").innerHTML="Menunggu GPS...";
+document.getElementById("sta").innerHTML="STA data loaded"
+document.getElementById("status").innerHTML="Waiting GPS..."
 
-startGPS();
+startGPS()
 
-});
+})
 
 </script>
 
