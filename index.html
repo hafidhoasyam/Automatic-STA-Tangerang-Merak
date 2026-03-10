@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Auto STA Continuous</title>
+<title>GPS Continuous STA</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -28,36 +28,27 @@ font-size:18px;
 
 <h2>GPS Continuous STA</h2>
 
-<div id="sta">Loading...</div>
+<div id="sta">Loading STA data...</div>
 <div id="offset"></div>
 
 <script>
 
 let staData=[];
 
-fetch("sta_tm.csv")
-.then(r=>r.text())
-.then(text=>{
+function startGPS(){
 
-let rows=text.split("\n").slice(1);
+navigator.geolocation.watchPosition(pos=>{
 
-rows.forEach(r=>{
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
 
-let c=r.split(",");
+findSTA(lat,lon);
 
-if(c.length>2){
-
-staData.push({
-sta:parseFloat(c[0]),
-lat:parseFloat(c[1]),
-lon:parseFloat(c[2])
+},{
+enableHighAccuracy:true
 });
 
 }
-
-});
-
-});
 
 function distance(lat1,lon1,lat2,lon2){
 
@@ -102,29 +93,41 @@ if(!p2) return;
 let d1=distance(lat,lon,p1.lat,p1.lon);
 let d2=distance(lat,lon,p2.lat,p2.lon);
 
-let segment=distance(p1.lat,p1.lon,p2.lat,p2.lon);
-
 let ratio=d1/(d1+d2);
 
 let sta=p1.sta+(p2.sta-p1.sta)*ratio;
 
-document.getElementById("sta").innerHTML=
-"STA "+sta.toFixed(1);
-
-document.getElementById("offset").innerHTML=
-"Offset "+min.toFixed(2)+" m";
+document.getElementById("sta").innerHTML="STA "+sta.toFixed(1);
+document.getElementById("offset").innerHTML="Offset "+min.toFixed(2)+" m";
 
 }
 
-navigator.geolocation.watchPosition(pos=>{
+fetch("sta_tm.csv?nocache="+Date.now())
+.then(r=>r.text())
+.then(text=>{
 
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
+let rows=text.split("\n").slice(1);
 
-findSTA(lat,lon);
+rows.forEach(r=>{
 
-},{
-enableHighAccuracy:true
+let c=r.split(",");
+
+if(c.length>=3){
+
+staData.push({
+sta:parseFloat(c[0]),
+lat:parseFloat(c[1]),
+lon:parseFloat(c[2])
+});
+
+}
+
+});
+
+document.getElementById("sta").innerHTML="STA data loaded";
+
+startGPS();
+
 });
 
 </script>
